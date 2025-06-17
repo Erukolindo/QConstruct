@@ -68,8 +68,35 @@ document.addEventListener("DOMContentLoaded", () => {
             .then(() => console.log("✅ Service worker registered"))
             .catch((err) => console.error("Service worker failed:", err));
     }
+
+    if (location.protocol === "http:" || location.protocol === "https:") {
+        const manifest = document.createElement("link");
+        manifest.rel = "manifest";
+        manifest.href = "manifest.json";
+        document.head.appendChild(manifest);
+    }
+
+    updateRuntimeStatus();
 });
 
+function updateRuntimeStatus() {
+    const el = document.getElementById("runtime-status");
+    if (!el) return;
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+
+    let status = "";
+    if (isStandalone) {
+        status = "📱 Installed (PWA)";
+    } else if (location.protocol === "file:") {
+        status = "🗂️ Local File Mode";
+    } else {
+        status = "🌐 Browser Mode";
+    }
+
+    el.textContent = `QConstruct – ${status}`;
+}
 
 function scheduleAutosave() {
     clearTimeout(autosaveTimer);

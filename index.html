@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QConstruct Playlist Manager</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e1e1e">
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1e1e1e;
+            color: #ddd;
+            margin: 20px;
+            line-height: 1.5;
+        }
+
+        input, select, button, textarea {
+            border: 1px solid;
+            border-radius: 4px;
+            padding: 2px 3px;
+            background-color: #2a2a2a;
+            color: #eee;
+            border-color: #555;
+            font-family: inherit;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .playlist-section {
+            margin-bottom: 20px;
+        }
+
+        .toggle-btn {
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .tag-filter {
+            margin-bottom: 5px;
+        }
+
+        .fixed-label {
+            display: inline-block;
+            font-weight: bold;
+            vertical-align: middle;
+        }
+
+        #playlists-scroll-container {
+            display: flex;
+            overflow-x: auto;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+        }
+
+        .playlist-card {
+            min-width: 200px;
+            maxWidth 240px;
+            padding: 10px;
+            border: 1px solid;
+            flexShrink 0;
+            wordWrap break-word;
+            background-color: #292929;
+            border-color: #555;
+        }
+
+        body.light {
+            background-color: #f3f3f3;
+            color: #222;
+        }
+
+            body.light input,
+            body.light select,
+            body.light textarea,
+            body.light button {
+                border-color: #aaa;
+                background-color: white;
+                color: black;
+            }
+
+            body.light .playlist-card {
+                background-color: #f9f9f9;
+                border-color: #ccc;
+            }
+
+            body.light .hidden {
+                display: none;
+            }
+
+        .file-button {
+            display: inline-block;
+            padding: 2px 3px;
+            border-radius: 4px;
+            border: 1px solid;
+            cursor: pointer;
+            font-size: 14px;
+            background-color: #2a2a2a;
+            border-color: #555;
+            color: #eee;
+        }
+
+        body.light .file-button {
+            color: black;
+            background-color: #eee;
+            border-color: #aaa;
+        }
+
+        .manager-row:nth-child(even) {
+            background-color: #333;
+        }
+
+        body.light .manager-row:nth-child(even) {
+            background-color: #d3d3d3;
+        }
+    </style>
+</head>
+<body>
+    <div style="background-color: #222; color: white; padding: 0.4em; text-align: center;">
+        <h1 style="font-size: 2.5em;">QConstruct</h1>
+        <p style="font-style: italic; color: #666;">Tag-based YouTube playlist manager</p>
+    </div>
+    <label style="float: right; cursor: pointer;">
+        <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()" />
+        Dark Mode
+    </label>
+    <div class="playlist-section">
+        <label for="api-key-input">YouTube API Key:</label>
+        <input type="text" id="api-key-input" placeholder="Paste API key" />
+        <button onclick="saveApiKey()">Save</button>
+        <span id="api-key-status" style="margin-left: 10px; color: green; font-size: 0.9em;"></span>
+    </div>
+    <div class="playlist-section">
+        <label for="playlist-url">YouTube Playlist URL:</label>
+        <input type="text" id="playlist-url" placeholder="Enter YouTube URL">
+        <button onclick="addFromLink()">Add From Link</button>
+    </div>
+    <div class="playlist-section">
+        <label for="file-input">Import playlist data:</label>
+        <label class="file-button">
+            Choose Files
+            <input type="file" id="file-input" accept=".json" multiple onchange="loadPlaylists()" hidden>
+        </label>
+        <button onclick="downloadAllPlaylistsData()">Download Data</button>
+    </div>
+    <div class="playlist-section">
+        <button onclick="toggleCategoryManager()">Toggle Custom Category Manager</button>
+        <div id="category-manager" class="hidden"></div>
+    </div>
+    <div id="tag-filter-container" class="playlist-section"></div>
+    <div class="playlist-section">
+        <button onclick="toggleTagManager()">Toggle Tag Manager</button>
+        <div id="tag-manager-section" class="hidden"></div>
+    </div>
+
+
+    <h2>Playlists</h2>
+    <div id="playlists-scroll-container">
+        <!-- Playlist cards will go here dynamically -->
+    </div>
+
+    <div class="playlist-section">
+        <button onclick="playCurrentPlaylist()">Generate Combined List</button>
+        <button onclick="reshuffleAndPlay()">Reshuffle and Play</button>
+    </div>
+
+    <div id="player-container">
+        <div id="video-info-container"></div>
+        <div id="player"></div>
+        <div class="playlist-section">
+            <label for="remove-tag-input">Remove all videos with tag:</label>
+            <input type="text" id="remove-tag-input" placeholder="Tag name" list="remove-tag-suggestions">
+            <datalist id="remove-tag-suggestions"></datalist>
+            <button onclick="removeVideosWithTag()">Remove from Shuffled</button>
+            <button onclick="scrollToCurrentVideo()">Scroll to Current</button>
+            <br>
+            <input type="checkbox" id="loop-playlist" />
+            <label for="loop-playlist">Loop the playlist</label>
+            <input type="checkbox" id="auto-skip-unavailable" />
+            <label for="auto-skip-unavailable">Skip unavailable videos</label>
+        </div>
+        <div id="scrollable-video-list" style="overflow-y: auto; max-height: 200px; border: 1px solid #ccc; margin-top: 10px;"></div>
+    </div>
+
+    <pre id="output"></pre>
+
+    <script src="script.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

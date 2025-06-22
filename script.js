@@ -76,6 +76,8 @@ document.addEventListener("DOMContentLoaded", () => {
         document.head.appendChild(manifest);
     }
 
+    tags["All"] = { category: "special" }; 
+
     updateRuntimeStatus();
 });
 
@@ -503,9 +505,16 @@ function renderTagManager(filterText = '') {
         renderTagManager.updateToggles();
     }
 
-    const allTags = Object.keys(tags).sort((a, b) =>
-        a == null ? 1 : b == null ? -1 : a.localeCompare(b, undefined, { sensitivity: 'base' })
-    );
+    const allTags = Object.keys(tags).sort((a, b) => {
+        if (a == null) return 1;
+        if (b == null) return -1;
+        const catA = tags[a]?.category || "normal";
+        const catB = tags[b]?.category || "normal";
+        if (catA === "special" && catB !== "special") return -1;
+        if (catB === "special" && catA !== "special") return 1;
+        if (catA !== catB) return catA.localeCompare(catB, undefined, { sensitivity: 'base' });
+        return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
 
     const visible = renderTagManager.visibleCategories || new Set(tagCategories);
 
@@ -557,64 +566,59 @@ function renderTagManager(filterText = '') {
             }
             row.appendChild(categoryDropdown);
 
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = 'Rename/Merge into...';
-            input.style.marginRight = '5px';
-            row.appendChild(input);
+            if (currentCat !== "special") {
 
-            const mergeBtn = document.createElement('button');
-            mergeBtn.textContent = 'Rename/Merge';
-            mergeBtn.onclick = () => {
-                const newTag = input.value.trim();
-                if (!newTag || newTag === tag) return;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = 'Rename/Merge into...';
+                input.style.marginRight = '5px';
+                row.appendChild(input);
 
-                videos.forEach(video => {
-                    if (video.tags.includes(tag)) {
-                        video.tags = [...new Set(video.tags.map(t => t === tag ? newTag : t))];
-                    }
-                });
+                const mergeBtn = document.createElement('button');
+                mergeBtn.textContent = 'Rename/Merge';
+                mergeBtn.onclick = () => {
+                    const newTag = input.value.trim();
+                    if (!newTag || newTag === tag) return;
 
-                playlists.forEach(pl => {
-                    pl.includedTags = pl.includedTags.map(t => t === tag ? newTag : t);
-                    pl.excludedTags = pl.excludedTags.map(t => t === tag ? newTag : t);
-                });
+                    videos.forEach(video => {
+                        if (video.tags.includes(tag)) {
+                            video.tags = [...new Set(video.tags.map(t => t === tag ? newTag : t))];
+                        }
+                    });
 
-                delete tags[tag];
-                updateTags([newTag]); //calls scheduleAutosave
-                renderTagManager(filterText);
-                renderPlaylistsUI(document.getElementById('playlists-scroll-container'));
-                displayTagFilters();
-            };
-            row.appendChild(mergeBtn);
+                    playlists.forEach(pl => {
+                        pl.includedTags = pl.includedTags.map(t => t === tag ? newTag : t);
+                        pl.excludedTags = pl.excludedTags.map(t => t === tag ? newTag : t);
+                    });
 
-            const delBtn = document.createElement('button');
-            delBtn.textContent = 'Delete';
-            delBtn.style.marginLeft = '10px';
-            delBtn.onclick = () => {
-                if (!confirm(`Remove all instances of tag "${tag}"?`)) return;
+                    delete tags[tag];
+                    updateTags([newTag]); //calls scheduleAutosave
+                    renderTagManager(filterText);
+                    renderPlaylistsUI(document.getElementById('playlists-scroll-container'));
+                };
+                row.appendChild(mergeBtn);
 
-                videos.forEach(video => {
-                    video.tags = video.tags.filter(t => t !== tag);
-                });
+                const delBtn = document.createElement('button');
+                delBtn.textContent = 'Delete';
+                delBtn.style.marginLeft = '10px';
+                delBtn.onclick = () => {
+                    if (!confirm(`Remove all instances of tag "${tag}"?`)) return;
 
-                playlists.forEach(pl => {
-                    pl.includedTags = pl.includedTags.filter(t => t !== tag);
-                    pl.excludedTags = pl.excludedTags.filter(t => t !== tag);
-                });
+                    videos.forEach(video => {
+                        video.tags = video.tags.filter(t => t !== tag);
+                    });
 
-                delete tags[tag];
-                renderTagManager(filterText);
-                renderPlaylistsUI(document.getElementById('playlists-scroll-container'));
-                displayTagFilters();
-                scheduleAutosave();
-            };
-            row.appendChild(delBtn);
+                    playlists.forEach(pl => {
+                        pl.includedTags = pl.includedTags.filter(t => t !== tag);
+                        pl.excludedTags = pl.excludedTags.filter(t => t !== tag);
+                    });
 
-            if (currentCat === "special") {
-                input.disabled = true;
-                mergeBtn.disabled = true;
-                delBtn.disabled = true;
+                    delete tags[tag];
+                    renderTagManager(filterText);
+                    renderPlaylistsUI(document.getElementById('playlists-scroll-container'));
+                    scheduleAutosave();
+                };
+                row.appendChild(delBtn);
             }
 
             tagList.appendChild(row);
@@ -942,8 +946,18 @@ function renderPlaylistsUI(container) {
             URL.revokeObjectURL(url);
         };
         row2.appendChild(exportBtn);
-
         card.appendChild(row2);
+
+        // Row 3: Append
+        const appendBtn = document.createElement('button');
+        appendBtn.textContent = "Append";
+        appendBtn.onclick = () => {
+            const appended = getShuffledPlaylistVideos(playlist);
+            combinedList.push(...appended);
+            updateScrollableVideoList();
+        };
+        card.appendChild(appendBtn);
+
 
         // Skip arrow buttons if this is the last (blank) playlist
         const isTemplateCard = index === playlists.length - 1;
@@ -1047,14 +1061,10 @@ function createTagEditor(playlist, key, labelText) {
     function renderTagList() {
         tagList.innerHTML = '';
         const sortedTags = [...playlist[key]].sort((a, b) => a.localeCompare(b));
-        sortedTags.forEach((tag, tagIndex) => {
+
+        sortedTags.forEach((tag) => {
             const tagItem = document.createElement('div');
-            tagItem.style.display = 'inline-flex';
-            tagItem.style.alignItems = 'center';
-            tagItem.style.padding = '2px 5px';
-            tagItem.style.border = '1px solid #999';
-            tagItem.style.borderRadius = '4px';
-            tagItem.style.backgroundColor = '#eee';
+            tagItem.className = 'tag-pill';
 
             const text = document.createElement('span');
             text.textContent = tag;
@@ -1062,9 +1072,6 @@ function createTagEditor(playlist, key, labelText) {
 
             const removeBtn = document.createElement('button');
             removeBtn.textContent = '×';
-            removeBtn.style.marginLeft = '5px';
-            removeBtn.style.fontSize = '10px';
-            removeBtn.style.padding = '0 4px';
             removeBtn.onclick = () => {
                 playlist[key] = playlist[key].filter(t => t !== tag);
                 renderTagList();
@@ -1079,7 +1086,7 @@ function createTagEditor(playlist, key, labelText) {
         datalist.innerHTML = '';
         const value = input.value.toLowerCase();
         Object.keys(tags)
-            .filter(tag => tag.toLowerCase().includes(value) && !playlist[key].includes(tag))
+            .filter(tag => (tag !== "All" || key === "includedTags") && tag.toLowerCase().includes(value) && !playlist[key].includes(tag))
             .forEach(tag => {
                 const option = document.createElement('option');
                 option.value = tag;
@@ -1090,13 +1097,17 @@ function createTagEditor(playlist, key, labelText) {
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             const newTag = input.value.trim();
-            if (newTag && !playlist[key].includes(newTag)) {
+            input.value = '';
+            if (!newTag) 
+                return;
+            if (newTag === "All" && key === "excludedTags")
+            {
+                alert(`The "All" tag cannot be used as an exclusion.`);
+            }
+            else if (!playlist[key].includes(newTag)) {
                 playlist[key].push(newTag);
-                input.value = '';
                 renderTagList();
                 scheduleAutosave();
-            } else {
-                input.value = '';
             }
             e.preventDefault();
         }
@@ -1108,11 +1119,14 @@ function createTagEditor(playlist, key, labelText) {
 
 function playPlaylist(index) {
     const playlist = playlists[index];
-    combinedList = videos.filter(video => {
-        const included = playlist.includedTags.some(tag => video.tags.includes(tag));
-        const excluded = playlist.excludedTags.some(tag => video.tags.includes(tag));
-        return included && !excluded;
-    });
+
+    if (!playlist || !playlist.includedTags || playlist.includedTags.length === 0)
+    {
+        alert("Playlist is empty.");
+        return;
+    }
+
+    combinedList = getShuffledPlaylistVideos(playlist);
 
     if (combinedList.length === 0) {
         alert("No videos matched the playlist tags.");
@@ -1121,9 +1135,35 @@ function playPlaylist(index) {
 
     updateRemoveTagSuggestions();
 
-    combinedList.sort(() => Math.random() - 0.5);
+    currentPlaylistIndex = index;
     currentVideoIndex = 0;
     playVideos();
+}
+
+function getShuffledPlaylistVideos(playlist)
+{
+    let shuffledVideos;
+
+    let allowAll = playlist.includedTags.includes("All");
+    if (allowAll) {
+        // ignore includedTags, only apply excludedTags
+        const excluded = playlist.excludedTags || [];
+        shuffledVideos = videos.filter(v =>
+            !v.tags.some(t => excluded.includes(t))
+        );
+    } else {
+        const includes = playlist.includedTags || [];
+        const excludes = playlist.excludedTags || [];
+
+        shuffledVideos = videos.filter(v =>
+            includes.some(t => v.tags.includes(t)) &&
+            !v.tags.some(t => excludes.includes(t))
+        );
+    }
+
+    shuffledVideos.sort(() => Math.random() - 0.5);
+
+    return shuffledVideos;
 }
 
 function playCurrentPlaylist() {
@@ -1200,17 +1240,22 @@ function updateVideoInfoDisplay(video) {
         const value = tagInput.value.trim();
         autofillList.innerHTML = '';
         Object.keys(tags)
-            .filter(t => t.toLowerCase().includes(value.toLowerCase()))
+            .filter(t => t !== "All" && t.toLowerCase().includes(value.toLowerCase()))
             .forEach(t => {
                 const opt = document.createElement('option');
                 opt.value = t;
                 autofillList.appendChild(opt);
             });
 
-        if (tags[value]) {
+        if (value === "All") {
             updateCategoryDropdown(tags[value].category, true);
+            addTagButton.disabled = true;
+        } else if (tags[value]) {
+            updateCategoryDropdown(tags[value].category, true);
+            addTagButton.disabled = false;
         } else {
             updateCategoryDropdown("normal", false);
+            addTagButton.disabled = false;
         }
     };
 
@@ -1330,7 +1375,7 @@ function updateRemoveTagSuggestions() {
     datalist.innerHTML = '';
 
     const playlistTags = new Set(combinedList.flatMap(v => v.tags || []));
-    [...playlistTags].sort((a, b) => a == null ? 1 : b == null ? -1 : a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    [...playlistTags].filter(tag => tag !== "All").sort((a, b) => a == null ? 1 : b == null ? -1 : a.localeCompare(b, undefined, { sensitivity: 'base' }))
         .forEach(tag => {
             const opt = document.createElement('option');
             opt.value = tag;
@@ -1340,6 +1385,11 @@ function updateRemoveTagSuggestions() {
 
 function removeVideosWithTag() {
     var tag = document.getElementById('remove-tag-input').value.trim();
+
+    if (tag === "All") {
+        alert(`The "All" tag is not valid for this operation.`);
+        return;
+    }
 
     const wasCurrentRemoved = combinedList[currentVideoIndex]?.tags.includes(tag);
     let removedBeforeCurrent = 0;
@@ -1430,7 +1480,8 @@ function playVideos() {
         return;
     }
 
-    if (!player) {
+    if (!player)
+    {
         player = new YT.Player('player', {
             height: '390',
             width: '640',

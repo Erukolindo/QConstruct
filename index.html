@@ -120,6 +120,38 @@
         body.light .manager-row:nth-child(even) {
             background-color: #d3d3d3;
         }
+
+        .tag-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 3px;
+            border: 1px solid #666;
+            border-radius: 4px;
+            background-color: #333;
+            color: #eee;
+            margin: 2px;
+            font-size: 0.9em;
+        }
+
+        body.light .tag-pill {
+            background-color: #eee;
+            border-color: #999;
+            color: black;
+        }
+
+        .tag-pill button {
+            margin-left: 5px;
+            font-size: 10px;
+            padding: 0 4px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: inherit;
+        }
+
+            .tag-pill button:hover {
+                color: red;
+            }
     </style>
 </head>
 <body>
@@ -167,7 +199,7 @@
     </div>
 
     <div class="playlist-section">
-        <button onclick="playCurrentPlaylist()">Generate Combined List</button>
+        <button onclick="playCurrentPlaylist()">Regenerate Combined List</button>
         <button onclick="reshuffleAndPlay()">Reshuffle and Play</button>
     </div>
 

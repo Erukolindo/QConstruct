@@ -429,6 +429,7 @@ function toggleTagManager() {
 
 function renderTagManager(filterText = '') {
     const section = document.getElementById('tag-manager-section');
+    let videoListOpenFor = null;
     
     // Only create the layout once
     if (!section.dataset.initialized) {
@@ -565,6 +566,64 @@ function renderTagManager(filterText = '') {
                 categoryDropdown.disabled = true;
             }
             row.appendChild(categoryDropdown);
+
+            const showBtn = document.createElement('button');
+            showBtn.textContent = 'Show Videos';
+            let videoListDiv = null;
+
+            showBtn.onclick = () => {
+                // If already open for this tag, toggle it off
+                if (videoListOpenFor === tag && videoListDiv) {
+                    videoListDiv.remove();
+                    videoListOpenFor = null;
+                    videoListDiv = null;
+                    return;
+                }
+
+                // Close any existing open list
+                const existing = document.querySelector('.tag-video-list');
+                if (existing) existing.remove();
+
+                videoListOpenFor = tag;
+
+                videoListDiv = document.createElement('div');
+                videoListDiv.className = 'tag-video-list';
+                videoListDiv.style.marginTop = '6px';
+                videoListDiv.style.paddingLeft = '20px';
+                videoListDiv.style.borderLeft = '2px solid #888';
+
+                const matching = videos.filter(v => v.tags.includes(tag));
+                if (matching.length === 0) {
+                    videoListDiv.textContent = '(No videos with this tag)';
+                } else {
+                    matching.forEach(video => {
+                        const row = document.createElement('div');
+                        row.style.display = 'flex';
+                        row.style.justifyContent = 'space-between';
+                        row.style.alignItems = 'center';
+                        row.style.marginBottom = '2px';
+
+                        const name = document.createElement('span');
+                        name.textContent = video.name || video.link;
+                        row.appendChild(name);
+
+                        const removeBtn = document.createElement('button');
+                        removeBtn.textContent = '❌';
+                        removeBtn.onclick = () => {
+                            video.tags = video.tags.filter(t => t !== tag);
+                            row.style.opacity = '0.5';
+                            row.style.pointerEvents = 'none';
+                            row.style.textDecoration = 'line-through';
+                        };
+
+                        row.appendChild(removeBtn);
+                        videoListDiv.appendChild(row);
+                    });
+                }
+
+                row.appendChild(videoListDiv); // 'row' is the tag's row in the manager
+            };
+            row.appendChild(showBtn);
 
             if (currentCat !== "special") {
 

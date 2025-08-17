@@ -63,6 +63,16 @@ QConstruct is a browser-based playlist organizer and shuffler for YouTube videos
 
 ---
 
+🤖 Automated Tag Conversion
+
+- Create conversion rules to automatically tag videos based on their title, channel name, or existing tags.
+- Rules can use "contains" or "matches" logic with optional case sensitivity.
+- A new rule is automatically applied to all videos in the database.
+- All rules are applied to new videos added to the database.
+- Rules are exported and imported alongside other database data
+
+---
+
 ### 🛑 Special Tags
 
 - `"Unavailable"`: automatically assigned when a video fails to load (e.g., deleted or region-locked)

@@ -2,6 +2,7 @@
 let playlists = [];
 let tags = {};
 let tagCategories = new Set(["normal", "special", "creator", "playlist"]);
+let conversionRules = [];
 let combinedList = [];
 let currentVideoIndex = 0;
 let currentPlaylistIndex = 0;
@@ -53,6 +54,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     });
                 }
+            }
+
+            if (parsed.conversionRules) {
+                conversionRules = parsed.conversionRules;
             }
 
             renderPlaylistsUI(document.getElementById('playlists-scroll-container'));
@@ -228,7 +233,19 @@ function addVideoToDatabase(video, playlistTag = "") {
     const existingVideo = videos.find(v => v.link === video.link);
     if (existingVideo) {
         existingVideo.tags = Array.from(new Set([...existingVideo.tags, ...video.tags]));
+        // Apply conversion rules to the updated video
+        conversionRules.forEach(rule => {
+            if (rule.ruleString.trim() && rule.resultingTag.trim()) {
+                applyRuleToVideo(existingVideo, rule);
+            }
+        });
     } else {
+        // Apply conversion rules to new video
+        conversionRules.forEach(rule => {
+            if (rule.ruleString.trim() && rule.resultingTag.trim()) {
+                applyRuleToVideo(video, rule);
+            }
+        });
         videos.push(video);
     }
 
@@ -685,6 +702,253 @@ function renderTagManager(filterText = '') {
     scheduleAlignLabels();
 }
 
+function toggleAutomatedTagConversion() {
+    const section = document.getElementById('automated-tag-conversion-section');
+    if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        renderConversionRules();
+    } else {
+        section.classList.add('hidden');
+    }
+}
+
+function renderConversionRules() {
+    const section = document.getElementById('conversion-rules-list');
+    section.innerHTML = '';
+
+    // Always ensure there's an empty template at the end
+    const hasEmptyTemplate = conversionRules.length > 0 &&
+        conversionRules[conversionRules.length - 1].ruleString === '';
+
+    if (!hasEmptyTemplate) {
+        conversionRules.push({
+            ruleString: '',
+            matchType: 'contains',
+            caseSensitive: false,
+            targetType: 'tag',
+            resultingTag: '',
+            edited: false
+        });
+    }
+
+    // Display rules in reverse order (newest first, template last)
+    const displayRules = [...conversionRules].reverse();
+
+    displayRules.forEach((rule, displayIndex) => {
+        const actualIndex = conversionRules.length - 1 - displayIndex;
+        const isTemplate = actualIndex === conversionRules.length - 1 && rule.ruleString === '';
+
+        const row = document.createElement('div');
+        row.classList.add('manager-row');
+        row.style.marginBottom = '5px';
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.style.flexWrap = 'wrap';
+
+        // Rule string input
+        const ruleInput = document.createElement('input');
+        ruleInput.type = 'text';
+        ruleInput.placeholder = 'Rule string';
+        ruleInput.value = rule.ruleString;
+        ruleInput.style.minWidth = '150px';
+        ruleInput.oninput = () => {
+            rule.ruleString = ruleInput.value;
+            rule.edited = true;
+            updateApplyButtonState();
+        };
+        row.appendChild(ruleInput);
+
+        // Match type dropdown
+        const matchTypeSelect = document.createElement('select');
+        ['contains', 'matches'].forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            if (rule.matchType === type) option.selected = true;
+            matchTypeSelect.appendChild(option);
+        });
+        matchTypeSelect.onchange = () => {
+            rule.matchType = matchTypeSelect.value;
+            rule.edited = true;
+            updateApplyButtonState();
+        };
+        row.appendChild(matchTypeSelect);
+
+        // Case sensitive toggle
+        const caseLabel = document.createElement('label');
+        caseLabel.style.display = 'flex';
+        caseLabel.style.alignItems = 'center';
+        caseLabel.style.gap = '4px';
+        const caseCheckbox = document.createElement('input');
+        caseCheckbox.type = 'checkbox';
+        caseCheckbox.checked = rule.caseSensitive;
+        caseCheckbox.onchange = () => {
+            rule.caseSensitive = caseCheckbox.checked;
+            rule.edited = true;
+            updateApplyButtonState();
+        };
+        caseLabel.appendChild(caseCheckbox);
+        caseLabel.appendChild(document.createTextNode('Case sensitive'));
+        row.appendChild(caseLabel);
+
+        // Target type dropdown
+        const targetSelect = document.createElement('select');
+        ['tag', 'video title', 'channel name'].forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            if (rule.targetType === type) option.selected = true;
+            targetSelect.appendChild(option);
+        });
+        targetSelect.onchange = () => {
+            rule.targetType = targetSelect.value;
+            rule.edited = true;
+            updateApplyButtonState();
+        };
+        row.appendChild(targetSelect);
+
+        // Resulting tag input with autofill
+        const resultInput = document.createElement('input');
+        resultInput.type = 'text';
+        resultInput.placeholder = 'Resulting tag';
+        resultInput.value = rule.resultingTag;
+        resultInput.style.minWidth = '150px';
+
+        // Create datalist for tag suggestions
+        const datalistId = `rule-tag-suggestions-${actualIndex}`;
+        const datalist = document.createElement('datalist');
+        datalist.id = datalistId;
+        resultInput.setAttribute('list', datalistId);
+        row.appendChild(datalist);
+
+        resultInput.oninput = () => {
+            rule.resultingTag = resultInput.value;
+            rule.edited = true;
+            updateApplyButtonState();
+
+            // Update datalist with tag suggestions
+            datalist.innerHTML = '';
+            const value = resultInput.value.toLowerCase();
+            Object.keys(tags)
+                .filter(tag => tag !== "All" && tag.toLowerCase().includes(value))
+                .forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag;
+                    datalist.appendChild(option);
+                });
+        };
+        row.appendChild(resultInput);
+
+        // Apply button (only shown when edited)
+        const applyBtn = document.createElement('button');
+        applyBtn.textContent = 'Apply';
+        applyBtn.style.display = rule.edited ? 'inline-block' : 'none';
+        applyBtn.onclick = () => applyConversionRule(actualIndex);
+        row.appendChild(applyBtn);
+
+        // Delete button (not shown for template)
+        if (!isTemplate) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.onclick = () => {
+                if (confirm('Delete this conversion rule?')) {
+                    conversionRules.splice(actualIndex, 1);
+                    renderConversionRules();
+                    scheduleAutosave();
+                }
+            };
+            row.appendChild(deleteBtn);
+        }
+
+        function updateApplyButtonState() {
+            applyBtn.style.display = rule.edited ? 'inline-block' : 'none';
+        }
+
+        section.appendChild(row);
+    });
+}
+
+function applyConversionRule(ruleIndex) {
+    const rule = conversionRules[ruleIndex];
+
+    if (!rule.ruleString.trim() || !rule.resultingTag.trim()) {
+        alert('Please fill in both rule string and resulting tag.');
+        return;
+    }
+
+    // If this is the template (last rule), create a new empty template
+    if (ruleIndex === conversionRules.length - 1 && rule.ruleString !== '') {
+        conversionRules.push({
+            ruleString: '',
+            matchType: 'contains',
+            caseSensitive: false,
+            targetType: 'tag',
+            resultingTag: '',
+            edited: false
+        });
+    }
+
+    // Apply rule to all videos
+    applyRuleToAllVideos(rule);
+
+    // Mark as no longer edited
+    rule.edited = false;
+
+    // Re-render the rules
+    renderConversionRules();
+
+    // Update tag manager if it's visible
+    if (!document.getElementById('tag-manager-section').classList.contains('hidden')) {
+        renderTagManager();
+    }
+
+    scheduleAutosave();
+}
+
+function applyRuleToAllVideos(rule) {
+    videos.forEach(video => applyRuleToVideo(video, rule));
+}
+
+function applyRuleToVideo(video, rule) {
+    // Check if video already has the resulting tag
+    if (video.tags.includes(rule.resultingTag)) {
+        return;
+    }
+
+    let searchTargets = [];
+
+    switch (rule.targetType) {
+        case 'tag':
+            searchTargets = video.tags;
+            break;
+        case 'video title':
+            searchTargets = [video.name];
+            break;
+        case 'channel name':
+            searchTargets = [video.channel];
+            break;
+    }
+
+    const matches = searchTargets.some(target => {
+        if (!target) return false;
+
+        const searchString = rule.caseSensitive ? target : target.toLowerCase();
+        const ruleString = rule.caseSensitive ? rule.ruleString : rule.ruleString.toLowerCase();
+
+        if (rule.matchType === 'contains') {
+            return searchString.includes(ruleString);
+        } else { // matches
+            return searchString === ruleString;
+        }
+    });
+
+    if (matches) {
+        video.tags.push(rule.resultingTag);
+        updateTags([rule.resultingTag]);
+    }
+}
+
 function alignFixedLabels() {
     const labels = document.querySelectorAll('.fixed-label');
     if (labels.length === 0) return;
@@ -756,7 +1020,8 @@ function getAllPlaylistsData()
     const allPlaylistsData = {
         videos: videos,
         playlists: playlists,
-        tagCategories: categoryMap
+        tagCategories: categoryMap,
+        conversionRules: conversionRules
     };
 
     return allPlaylistsData;
@@ -812,6 +1077,26 @@ function loadPlaylists() {
                             } else if (existing !== category) {
                                 console.warn(`Conflict: keeping existing category "${existing}" for tag "${tag}" (imported as "${category}")`);
                             }
+                        }
+                    });
+                }
+            }
+
+            if (playlistData.conversionRules) {
+                if (mode === 'override') {
+                    conversionRules = playlistData.conversionRules;
+                } else {
+                    // In merge mode, add rules that don't already exist
+                    playlistData.conversionRules.forEach(newRule => {
+                        const exists = conversionRules.some(existingRule =>
+                            existingRule.ruleString === newRule.ruleString &&
+                            existingRule.matchType === newRule.matchType &&
+                            existingRule.caseSensitive === newRule.caseSensitive &&
+                            existingRule.targetType === newRule.targetType &&
+                            existingRule.resultingTag === newRule.resultingTag
+                        );
+                        if (!exists) {
+                            conversionRules.push({ ...newRule, edited: false });
                         }
                     });
                 }

@@ -170,7 +170,7 @@
         <span id="api-key-status" style="margin-left: 10px; color: green; font-size: 0.9em;"></span>
     </div>
     <div class="playlist-section">
-        <label for="playlist-url">YouTube Playlist URL:</label>
+        <label for="playlist-url">YouTube Playlist/Video URL:</label>
         <input type="text" id="playlist-url" placeholder="Enter YouTube URL">
         <button onclick="addFromLink()">Add From Link</button>
     </div>
@@ -190,6 +190,12 @@
     <div class="playlist-section">
         <button onclick="toggleTagManager()">Toggle Tag Manager</button>
         <div id="tag-manager-section" class="hidden"></div>
+    </div>
+    <div class="playlist-section">
+        <button onclick="toggleAutomatedTagConversion()">Toggle Automated Tag Conversion</button>
+        <div id="automated-tag-conversion-section" class="hidden">
+            <div id="conversion-rules-list"></div>
+        </div>
     </div>
 
 
